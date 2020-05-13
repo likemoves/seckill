@@ -43,4 +43,13 @@ public class LoginController {
         seckillUserService.login(response,loginVo);
         return Result.success(true);
     }
+
+    @RequestMapping("/createToken")
+    @ResponseBody
+    public Result<String> createToken(HttpServletResponse response, @Valid LoginVo loginVo) {
+        log.info(loginVo.toString());
+        //登录
+        String token=seckillUserService.createToken(response,loginVo);
+        return Result.success(token);
+    }
 }

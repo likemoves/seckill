@@ -25,7 +25,7 @@ import javax.servlet.http.HttpServletResponse;
 @Service
 public class SeckillUserService {
 
-    public static final String COOK_NAME_TOKEN="token";
+    public static final String COOK_NAME_TOKEN = "token";
 
     @Autowired
     SeckillUserDao seckillUserDao;
@@ -34,11 +34,43 @@ public class SeckillUserService {
     RedisService redisService;
 
     public SeckillUser getById(long id) {
-        return seckillUserDao.getById(id);
+        //取缓存
+        SeckillUser seckillUser = redisService.get(SeckillUserKey.getById, "" + id, SeckillUser.class);
+        if (seckillUser != null) {
+            return seckillUser;
+        }
+
+        //取数据库
+        seckillUser = seckillUserDao.getById(id);
+        if (seckillUser != null) {
+            redisService.set(SeckillUserKey.getById, "" + id, seckillUser);
+        }
+        return seckillUser;
 
     }
 
-    public boolean login(HttpServletResponse response,LoginVo loginVo) {
+    public boolean updatePassword(String token, long id, String formPass) {
+        //取user
+        SeckillUser seckillUser = getById(id);
+        if (seckillUser == null)
+            throw new GlobleException(CodeMsg.MOBILE_NOT_EXIST);
+
+        //更新数据库
+        SeckillUser toBeUpdate = new SeckillUser();
+        toBeUpdate.setId(id);
+        toBeUpdate.setPassword(MD5Util.formPassToDBPass(formPass, seckillUser.getSalt()));
+        seckillUserDao.update(toBeUpdate);
+        //处理缓存
+        redisService.delete(SeckillUserKey.getById, "" + id);
+        //
+        seckillUser.setPassword(toBeUpdate.getPassword());
+        redisService.set(SeckillUserKey.token, token, seckillUser);
+        return true;
+
+    }
+
+
+    public boolean login(HttpServletResponse response, LoginVo loginVo) {
         if (loginVo == null) {
             throw new GlobleException(CodeMsg.SERVER_ERROR);
         }
@@ -58,33 +90,61 @@ public class SeckillUserService {
             throw new GlobleException(CodeMsg.PASSWORD_ERROR);
         }
         //生成cookie
-        String token= UUIDUtil.uuid();
-        addCookie(response,token,user);
+        String token = UUIDUtil.uuid();
+        addCookie(response, token, user);
 
         return true;
 
 
     }
 
-    public SeckillUser getByToken(HttpServletResponse response,String token) {
-        if (StringUtils.isEmpty(token)){
+    public String createToken(HttpServletResponse response, LoginVo loginVo) {
+        if (loginVo == null) {
+            throw new GlobleException(CodeMsg.SERVER_ERROR);
+        }
+        String mobile = loginVo.getMobile();
+        String formPass = loginVo.getPassword();
+        //判断手机号是否存在
+        SeckillUser user = getById(Long.parseLong(mobile));
+        if (user == null) {
+            throw new GlobleException(CodeMsg.MOBILE_NOT_EXIST);
+        }
+
+        //验证密码
+        String dbPass = user.getPassword();
+        String saltDB = user.getSalt();
+        String calcPass = MD5Util.formPassToDBPass(formPass, saltDB);
+        if (!dbPass.equals(calcPass)) {
+            throw new GlobleException(CodeMsg.PASSWORD_ERROR);
+        }
+        //生成cookie
+        String token = UUIDUtil.uuid();
+        addCookie(response, token, user);
+
+        return token;
+
+
+    }
+
+    public SeckillUser getByToken(HttpServletResponse response, String token) {
+        if (StringUtils.isEmpty(token)) {
             return null;
         }
         //延长有效期
-        SeckillUser user= redisService.get(SeckillUserKey.token,token,SeckillUser.class);
-        if (user!=null){
+        SeckillUser user = redisService.get(SeckillUserKey.token, token, SeckillUser.class);
+        if (user != null) {
 
-            addCookie(response,token,user);
+            addCookie(response, token, user);
         }
 
         return user;
     }
 
-    private void addCookie(HttpServletResponse response,String token,SeckillUser user){
+    private void addCookie(HttpServletResponse response, String token, SeckillUser user) {
 
 
-        redisService.set(SeckillUserKey.token,token,user);
-        Cookie cookie=new Cookie(COOK_NAME_TOKEN,token);
+        redisService.set(SeckillUserKey.token, token, user);
+        Cookie cookie = new Cookie(COOK_NAME_TOKEN, token);
         cookie.setMaxAge(SeckillUserKey.token.expireSeconds());
         cookie.setPath("/");
         response.addCookie(cookie);

@@ -5,6 +5,7 @@ import com.wzh.seckill.dao.OrderDao;
 import com.wzh.seckill.domain.OrderInfo;
 import com.wzh.seckill.domain.SeckillOrder;
 import com.wzh.seckill.domain.SeckillUser;
+import com.wzh.seckill.redis.RedisService;
 import com.wzh.seckill.vo.GoodsVo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+
+import static com.wzh.seckill.redis.OrderKey.getSeckillOrderByUserIdGoodsId;
 
 /**
  * Created by admin on 2020/5/6.
@@ -22,9 +25,17 @@ public class OrderService {
     @Autowired
     OrderDao orderDao;
 
+    @Autowired
+    RedisService redisService;
+
     public SeckillOrder getSeckillOrderByUserIdGoodsId(long userId, long goodsId) {
 
-        return orderDao.getSeckillOrderByUserIdGoodsId(userId, goodsId);
+        //查询缓存
+        return redisService.get(getSeckillOrderByUserIdGoodsId,""+userId+"_"+goodsId,SeckillOrder.class);
+
+
+        //查询数据库
+       // return orderDao.getSeckillOrderByUserIdGoodsId(userId, goodsId);
     }
 
     @Transactional
@@ -41,13 +52,22 @@ public class OrderService {
         orderInfo.setUserId(user.getId());
         long orderId = orderDao.insert(orderInfo);
 
+        //建立唯一索引 防止同一个用户写入多条数据  即每个用户只能秒杀一次
         SeckillOrder seckillOrder = new SeckillOrder();
         seckillOrder.setGoodsId(goods.getId());
         seckillOrder.setOrderId(orderId);
         seckillOrder.setUserId(user.getId());
         orderDao.insertSeckillOrder(seckillOrder);
+
+        //生成缓存
+        redisService.set(getSeckillOrderByUserIdGoodsId,""+user.getId()+"_"+goods.getId(),SeckillOrder.class);
+
         return orderInfo;
 
 
+    }
+
+    public OrderInfo getOrderById(long orderId) {
+        return orderDao.getOrderById(orderId);
     }
 }
