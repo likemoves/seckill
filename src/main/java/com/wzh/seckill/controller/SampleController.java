@@ -1,6 +1,7 @@
 package com.wzh.seckill.controller;
 
 import com.wzh.seckill.domain.User;
+import com.wzh.seckill.rabbitmq.MQSender;
 import com.wzh.seckill.redis.RedisService;
 import com.wzh.seckill.redis.UserKey;
 import com.wzh.seckill.result.Result;
@@ -24,11 +25,45 @@ public class SampleController {
     @Autowired
     RedisService redisService;
 
+    @Autowired
+    MQSender mqSender;
+
     @RequestMapping("/thymeleaf")
     public String thymeleaf(Model model) {
         model.addAttribute("name", "jack");
         return String.valueOf(Result.success("hello,world"));
     }
+
+//    @RequestMapping("/mq")
+//    @ResponseBody
+//    public Result<String> mq() {
+//        mqSender.send("hello rabbitMQ");
+//        return Result.success("hello,world");
+//    }
+//
+//    @RequestMapping("/mq/topic")
+//    @ResponseBody
+//    public Result<String> topic() {
+//        mqSender.sendTopic("hello rabbitMQ");
+//        return Result.success("hello,world");
+//    }
+//
+//
+//    @RequestMapping("/mq/fanout")
+//    @ResponseBody
+//    public Result<String> fanout() {
+//        mqSender.sendFanout("hello rabbitMQ");
+//        return Result.success("hello,world");
+//    }
+//
+//    @RequestMapping("/mq/header")
+//    @ResponseBody
+//    public Result<String> header() {
+//        mqSender.sendHeader("hello rabbitMQ");
+//        return Result.success("hello,world");
+//    }
+
+
 
     @RequestMapping("/db/get")
     @ResponseBody
